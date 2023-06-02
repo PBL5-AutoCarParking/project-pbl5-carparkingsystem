@@ -7,11 +7,15 @@ import requests
 import numpy as np
 import io
 from src.lp_recognition import E2E
-cap = cv2.VideoCapture(1)
+from tkinter import messagebox
+
+cap = cv2.VideoCapture(0)
 
 model = E2E()
+
 IP = '192.168.66.35'  # Replace with the IP address of your ESP32-CAM
 URL = f'http://{IP}/capture'
+
 DELAY = 1000  # Milliseconds to wait between updating the image
 WIDTH, HEIGHT = 640, 480  # Width and height of the image
 CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240  # Width and height of the capture image
@@ -27,9 +31,12 @@ class App:
 
         # Dòng label giữa hai phần trên bên trái và phải
         self.lbl_divider = tk.Label(window, text='-------------')
-        self.lbl_divider.grid(row=0, column=2, padx=10, pady=10)
+        self.lbl_divider.grid(row=0, column=2, columnspan=2, padx=10, pady=10)
 
-        # Phần trên bên trái (Camera từ URL)
+        self.esp32_error_message = tk.StringVar()
+        self.video_capture_error_message = tk.StringVar()
+
+# Phần trên bên trái (Camera từ URL)
         self.frame_top_left = tk.Frame(window)
         self.frame_top_left.grid(row=0, column=0, padx=10, pady=10)
 
@@ -41,6 +48,7 @@ class App:
 
         self.capture_image_top_left = tk.Label(self.capture_frame_top_left)
         self.capture_image_top_left.pack()
+        self.capture_frame_top_left.pack_propagate(0) # overflowing and covering the buttons
 
         self.btn_start_top_left = tk.Button(self.frame_top_left, text='Start', command=self.start_top_left)
         self.btn_start_top_left.pack(side=tk.TOP, padx=10, pady=10)
@@ -66,6 +74,7 @@ class App:
 
         self.capture_image_top_right = tk.Label(self.capture_frame_top_right)
         self.capture_image_top_right.pack()
+        self.capture_frame_top_right.pack_propagate(0)
 
         self.btn_start_top_right = tk.Button(self.frame_top_right, text='Start', command=self.start_top_right)
         self.btn_start_top_right.pack(side=tk.TOP, padx=10, pady=10)
@@ -86,12 +95,20 @@ class App:
         self.lbl_message_left = tk.Label(self.frame_bottom_left, text='Message:')
         self.lbl_message_left.pack(side=tk.LEFT)
 
+            # Hiển thị danh sách lỗi
+        self.lbl_esp32_error = tk.Label(self.frame_bottom_left, textvariable=self.esp32_error_message, fg='red')
+        self.lbl_esp32_error.pack(side=tk.LEFT)
+
         # Phần dưới bên phải (Message)
         self.frame_bottom_right = tk.Frame(window)
         self.frame_bottom_right.grid(row=1, column=1, padx=10, pady=10)
 
         self.lbl_message_right = tk.Label(self.frame_bottom_right, text='Message:')
         self.lbl_message_right.pack(side=tk.LEFT)
+
+            # Hiển thị danh sách lỗi
+        self.lbl_video_capture_error = tk.Label(self.frame_bottom_right, textvariable=self.video_capture_error_message, fg='red')
+        self.lbl_video_capture_error.pack(side=tk.LEFT)
 
         # Label cổng vào
         self.lbl_input_port = tk.Label(self.frame_top_left, text='Cổng vào')
@@ -109,7 +126,7 @@ class App:
         self.previous_capture_image_top_left = None
 
         # Các biến và cờ cho phần trên bên phải
-        self.video_capture = cv2.VideoCapture(0)
+        # self.video_capture = cv2.VideoCapture(0)
         self.running_top_right = False
         self.after_id_top_right = None
         self.can_capture_top_right = True
@@ -234,5 +251,25 @@ class App:
         if self.can_capture_top_right:
             self.previous_capture_image_top_right = self.capture_image_top_right.image
 
-app = App(window)
-window.mainloop()
+
+
+@app.route('/process_post', methods=['POST'])
+def receive_uuid():
+    uuid = request.form.get('uuid')
+    entry_signal=request.form.get('entry_signal')
+    if entry_signal=="True":
+        app_window.lbl_result_uuid_top_left.config(text='UUID: ' + uuid)
+    else:
+        app_window.lbl_result_uuid_top_right.config(text='UUID: ' + uuid)
+    return 'UUID received'
+
+
+@app.route('/')
+def index():
+    return 'Hello, World!'
+
+
+if __name__ == '__main__':
+    app_window = App(window)
+    threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 8000}).start()
+    window.mainloop()
